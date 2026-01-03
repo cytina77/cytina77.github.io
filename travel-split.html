@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>分帳工具完整版1</title>
+<title>分帳工具完整版</title>
 <style>
 body { font-family: Arial; max-width:900px; margin:auto; padding:10px; background:#f5f5f5; }
 h1,h2 { text-align:center; }
@@ -16,7 +16,7 @@ button { cursor:pointer; }
 </style>
 </head>
 <body>
-<h1>分帳工具完整版</h1>
+<h1>分帳工具完整版1</h1>
 
 <!-- 新增活動 -->
 <div class="card">
@@ -37,31 +37,57 @@ button { cursor:pointer; }
 <script>
 document.addEventListener("DOMContentLoaded", function(){
 
-// 初始化
-let events = JSON.parse(localStorage.getItem("events") || "{}");
+// ---------------- 初始化 ----------------
+let events = {};
+let stored = localStorage.getItem("events");
+if(stored){
+    try{ events = JSON.parse(stored); }catch(e){ events={}; }
+}
 let currentEvent = null;
 
-// 新增活動按鈕
+// ---------------- 新增活動 ----------------
 document.getElementById("addEventBtn").addEventListener("click", createEvent);
-
-// ----------- 活動功能 -----------
-
 function createEvent(){
     const name = document.getElementById("newEventName").value.trim();
     if(!name) return alert("請輸入活動名稱");
-    if(events[name]) return alert("活動已存在");
-    events[name] = { members: {}, expenses: [] };
+    if(events.hasOwnProperty(name)) return alert("活動已存在");
+
+    events[name] = { members:{}, expenses:[] };
     currentEvent = name;
-    saveEvents();
     document.getElementById("newEventName").value = "";
+
+    saveEvents();
     renderEvents();
     renderExpenses();
 }
 
+// ---------------- 活動列表 ----------------
+function renderEvents(){
+    const container = document.getElementById("eventsContainer");
+    container.innerHTML = "";
+    for(const name in events){
+        const div = document.createElement("div");
+        div.className="card";
+        div.innerHTML = `
+            <strong>${name}</strong>
+            <button onclick="selectEvent('${name}')">進入</button>
+            <button onclick="copyEvent('${name}')">複製</button>
+            <button onclick="deleteEvent('${name}')">刪除</button>
+            <button onclick="generateLink('${name}')">分享連結</button>
+        `;
+        container.appendChild(div);
+    }
+}
+
+window.selectEvent = function(name){
+    currentEvent=name;
+    renderExpenses();
+}
+
 function copyEvent(name){
-    const newName = name + "_複製";
-    if(events[newName]) return alert("已存在相同名稱活動");
-    events[newName] = JSON.parse(JSON.stringify(events[name]));
+    const newName=name+"_複製";
+    if(events.hasOwnProperty(newName)) return alert("已存在相同名稱活動");
+    events[newName]=JSON.parse(JSON.stringify(events[name]));
     saveEvents();
     renderEvents();
 }
@@ -76,20 +102,14 @@ function deleteEvent(name){
     }
 }
 
-function selectEvent(name){
-    currentEvent = name;
-    renderExpenses();
-}
-
 function generateLink(name){
-    const e = events[name];
-    const dataStr = btoa(JSON.stringify(e));
-    const link = location.origin + location.pathname + "?event=" + encodeURIComponent(name) + "&data=" + dataStr;
+    const e=events[name];
+    const dataStr=btoa(JSON.stringify(e));
+    const link=location.origin + location.pathname + "?event=" + encodeURIComponent(name) + "&data=" + dataStr;
     prompt("分享此連結給朋友：", link);
 }
 
-// ----------- 支出功能 -----------
-
+// ---------------- 支出功能 ----------------
 function renderExpenses(){
     const container = document.getElementById("eventsContainer");
     if(!currentEvent) return;
@@ -160,54 +180,52 @@ function deleteExpense(i){
     renderExpenses();
 }
 
-// ----------- 圓餅圖 -----------
-
+// ---------------- 圓餅圖 ----------------
 let pie=null;
 function updateChart(){
-    const chartCard = document.getElementById('chartCard');
-    if(!currentEvent) {
-        chartCard.style.display = 'none'; // 沒有選活動就隱藏圖表
+    const chartCard=document.getElementById("chartCard");
+    if(!currentEvent){
+        chartCard.style.display="none";
         return;
     }
-    chartCard.style.display = 'block'; // 顯示圖表
-    const ctx = document.getElementById('pieChart').getContext('2d');
-    const e = events[currentEvent];
-    const categories = {};
+    chartCard.style.display="block";
+    const ctx=document.getElementById("pieChart").getContext("2d");
+    const e=events[currentEvent];
+    const categories={};
     for(const ex of e.expenses){
-        categories[ex.category] = (categories[ex.category]||0)+ex.amount;
+        categories[ex.category]=(categories[ex.category]||0)+ex.amount;
     }
-    const data = {
+    const data={
         labels: Object.keys(categories),
-        datasets: [{
+        datasets:[{
             data: Object.values(categories),
-            backgroundColor: ['#FF6384','#36A2EB','#FFCE56','#66FF66','#FF9966','#9966FF']
+            backgroundColor:['#FF6384','#36A2EB','#FFCE56','#66FF66','#FF9966','#9966FF']
         }]
     };
     if(window.pie) window.pie.destroy();
-    window.pie = new Chart(ctx,{type:'pie',data:data});
+    window.pie=new Chart(ctx,{type:'pie',data:data});
 }
 
-// ----------- 儲存與分享 -----------
-
+// ---------------- 儲存與分享 ----------------
 function saveEvents(){
     localStorage.setItem("events", JSON.stringify(events));
 }
 
-// 讀取分享連結資料
+// ---------------- 讀取分享連結資料 ----------------
 function loadFromURL(){
-    const params = new URLSearchParams(window.location.search);
-    const name = params.get("event");
-    const data = params.get("data");
+    const params=new URLSearchParams(window.location.search);
+    const name=params.get("event");
+    const data=params.get("data");
     if(name && data){
         try{
-            events[name] = JSON.parse(atob(data));
+            events[name]=JSON.parse(atob(data));
             currentEvent=name;
             saveEvents();
         }catch(e){}
     }
 }
 
-// 初始化
+// ---------------- 初始化 ----------------
 loadFromURL();
 renderEvents();
 renderExpenses();
