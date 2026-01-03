@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>分帳工具完整版</title>
+<title>分帳工具完整版1</title>
 <style>
 body { font-family: Arial; max-width:900px; margin:auto; padding:10px; background:#f5f5f5; }
 h1,h2 { text-align:center; }
@@ -28,7 +28,7 @@ button { cursor:pointer; }
 <div id="eventsContainer"></div>
 
 <!-- 圓餅圖 -->
-<div class="card">
+<div class="card" id="chartCard" style="display:none;">
 <h2>支出類別分布</h2>
 <canvas id="pieChart" class="chart-container"></canvas>
 </div>
@@ -164,7 +164,12 @@ function deleteExpense(i){
 
 let pie=null;
 function updateChart(){
-    if(!currentEvent) return;
+    const chartCard = document.getElementById('chartCard');
+    if(!currentEvent) {
+        chartCard.style.display = 'none'; // 沒有選活動就隱藏圖表
+        return;
+    }
+    chartCard.style.display = 'block'; // 顯示圖表
     const ctx = document.getElementById('pieChart').getContext('2d');
     const e = events[currentEvent];
     const categories = {};
@@ -178,8 +183,8 @@ function updateChart(){
             backgroundColor: ['#FF6384','#36A2EB','#FFCE56','#66FF66','#FF9966','#9966FF']
         }]
     };
-    if(pie) pie.destroy();
-    pie = new Chart(ctx,{type:'pie',data:data});
+    if(window.pie) window.pie.destroy();
+    window.pie = new Chart(ctx,{type:'pie',data:data});
 }
 
 // ----------- 儲存與分享 -----------
