@@ -3,74 +3,210 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>分帳工具測試版</title>
+<title>分帳工具完整版</title>
 <style>
-body { font-family: Arial; max-width:600px; margin:auto; padding:10px; }
-.card { border:1px solid #ccc; border-radius:8px; padding:10px; margin:10px 0; background:#f9f9f9; }
-button { padding:5px 10px; margin-left:5px; cursor:pointer; }
+body { font-family: Arial; max-width:900px; margin:auto; padding:10px; background:#f5f5f5; }
+h1,h2 { text-align:center; }
+input, select, button { margin:5px; padding:5px; }
+.card { border:1px solid #ccc; border-radius:8px; padding:10px; margin:10px 0; background:#fff; box-shadow: 0 2px 5px rgba(0,0,0,0.1);}
+.chart-container { width:100%; max-width:400px; margin:auto; }
+.flex { display:flex; flex-wrap:wrap; gap:5px; }
+.flex input, .flex select { flex:1; min-width:100px; }
+button { cursor:pointer; }
 </style>
 </head>
 <body>
-<h1>分帳工具測試版</h1>
+<h1>分帳工具完整版</h1>
 
 <!-- 新增活動 -->
 <div class="card">
-<input id="newEventName" placeholder="輸入活動名稱">
+<input id="newEventName" placeholder="新增活動名稱">
 <button id="addEventBtn">新增活動</button>
 </div>
 
 <!-- 活動列表 -->
 <div id="eventsContainer"></div>
 
+<!-- 圓餅圖 -->
+<div class="card">
+<h2>支出類別分布</h2>
+<canvas id="pieChart" class="chart-container"></canvas>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-// 確保 JS 等網頁元素載入完才綁定事件
 document.addEventListener("DOMContentLoaded", function(){
 
-    // 初始化事件資料
-    let events = JSON.parse(localStorage.getItem("events") || "{}");
-    let currentEvent = null;
+// 初始化
+let events = JSON.parse(localStorage.getItem("events") || "{}");
+let currentEvent = null;
 
-    // 綁定按鈕
-    document.getElementById("addEventBtn").addEventListener("click", createEvent);
+// 新增活動按鈕
+document.getElementById("addEventBtn").addEventListener("click", createEvent);
 
-    // 新增活動
-    function createEvent(){
-        const name = document.getElementById("newEventName").value.trim();
-        if(!name){ alert("請輸入活動名稱"); return; }
-        if(events[name]){ alert("活動已存在"); return; }
-        events[name] = { expenses: [] };
-        currentEvent = name;
-        document.getElementById("newEventName").value = "";
+// ----------- 活動功能 -----------
+
+function createEvent(){
+    const name = document.getElementById("newEventName").value.trim();
+    if(!name) return alert("請輸入活動名稱");
+    if(events[name]) return alert("活動已存在");
+    events[name] = { members: {}, expenses: [] };
+    currentEvent = name;
+    saveEvents();
+    document.getElementById("newEventName").value = "";
+    renderEvents();
+    renderExpenses();
+}
+
+function copyEvent(name){
+    const newName = name + "_複製";
+    if(events[newName]) return alert("已存在相同名稱活動");
+    events[newName] = JSON.parse(JSON.stringify(events[name]));
+    saveEvents();
+    renderEvents();
+}
+
+function deleteEvent(name){
+    if(confirm("確定刪除活動？")){
+        delete events[name];
+        if(currentEvent===name) currentEvent=null;
         saveEvents();
         renderEvents();
+        renderExpenses();
     }
+}
 
-    // 顯示活動列表
-    function renderEvents(){
-        const container = document.getElementById("eventsContainer");
-        container.innerHTML = "";
-        for(const name in events){
-            const div = document.createElement("div");
-            div.className = "card";
-            div.innerHTML = `<strong>${name}</strong>
-            <button onclick="selectEvent('${name}')">進入</button>`;
-            container.appendChild(div);
-        }
+function selectEvent(name){
+    currentEvent = name;
+    renderExpenses();
+}
+
+function generateLink(name){
+    const e = events[name];
+    const dataStr = btoa(JSON.stringify(e));
+    const link = location.origin + location.pathname + "?event=" + encodeURIComponent(name) + "&data=" + dataStr;
+    prompt("分享此連結給朋友：", link);
+}
+
+// ----------- 支出功能 -----------
+
+function renderExpenses(){
+    const container = document.getElementById("eventsContainer");
+    if(!currentEvent) return;
+    const e = events[currentEvent];
+    let html = `<h2>${currentEvent}</h2>`;
+    html += `<div class="flex">
+        名稱: <input id="expName" placeholder="支出名稱">
+        金額: <input id="expAmount" type="number">
+        成員: <input id="expMember" placeholder="成員名稱">
+        分類: <select id="expCategory">
+            <option>餐飲</option><option>住宿</option><option>交通</option>
+            <option>飛機</option><option>玩樂</option><option>其他</option>
+        </select>
+        幣別: <select id="expCurrency"><option>AUD</option><option>JPY</option><option>USD</option></select>
+        日期: <input id="expDate" type="date">
+        <button onclick="addExpense()">新增支出</button>
+    </div>`;
+    html += "<ul>";
+    e.expenses.forEach((ex,i)=>{
+        html += `<li>${ex.member} ${ex.name} ${ex.amount} ${ex.currency} (${ex.category}) 日期:${ex.date} 
+        <button onclick="editExpense(${i})">編輯</button>
+        <button onclick="deleteExpense(${i})">刪除</button></li>`;
+    });
+    html += "</ul>";
+    container.innerHTML = html;
+    updateChart();
+}
+
+function addExpense(){
+    const e = events[currentEvent];
+    const name = document.getElementById("expName").value.trim();
+    const amount = parseFloat(document.getElementById("expAmount").value);
+    const member = document.getElementById("expMember").value.trim();
+    const category = document.getElementById("expCategory").value;
+    const currency = document.getElementById("expCurrency").value;
+    const date = document.getElementById("expDate").value;
+    if(!name || !amount || !member) return alert("請完整填寫支出");
+    e.expenses.push({name, amount, member, category, currency, date});
+    if(!e.members[member]) e.members[member]=0;
+    e.members[member]+=amount;
+    saveEvents();
+    renderExpenses();
+}
+
+function editExpense(i){
+    const e = events[currentEvent].expenses[i];
+    const name = prompt("名稱", e.name);
+    const amount = prompt("金額", e.amount);
+    const member = prompt("成員", e.member);
+    const category = prompt("分類", e.category);
+    const currency = prompt("幣別", e.currency);
+    const date = prompt("日期", e.date);
+    if(name && amount && member){
+        e.name=name; e.amount=parseFloat(amount); e.member=member;
+        e.category=category; e.currency=currency; e.date=date;
+        saveEvents();
+        renderExpenses();
     }
+}
 
-    // 選擇活動
-    window.selectEvent = function(name){
-        currentEvent = name;
-        alert("已選擇活動：" + name);
+function deleteExpense(i){
+    const e = events[currentEvent];
+    const ex = e.expenses[i];
+    e.members[ex.member]-=ex.amount;
+    if(e.members[ex.member]<=0) delete e.members[ex.member];
+    e.expenses.splice(i,1);
+    saveEvents();
+    renderExpenses();
+}
+
+// ----------- 圓餅圖 -----------
+
+let pie=null;
+function updateChart(){
+    if(!currentEvent) return;
+    const ctx = document.getElementById('pieChart').getContext('2d');
+    const e = events[currentEvent];
+    const categories = {};
+    for(const ex of e.expenses){
+        categories[ex.category] = (categories[ex.category]||0)+ex.amount;
     }
+    const data = {
+        labels: Object.keys(categories),
+        datasets: [{
+            data: Object.values(categories),
+            backgroundColor: ['#FF6384','#36A2EB','#FFCE56','#66FF66','#FF9966','#9966FF']
+        }]
+    };
+    if(pie) pie.destroy();
+    pie = new Chart(ctx,{type:'pie',data:data});
+}
 
-    // 儲存資料到 localStorage
-    function saveEvents(){
-        localStorage.setItem("events", JSON.stringify(events));
+// ----------- 儲存與分享 -----------
+
+function saveEvents(){
+    localStorage.setItem("events", JSON.stringify(events));
+}
+
+// 讀取分享連結資料
+function loadFromURL(){
+    const params = new URLSearchParams(window.location.search);
+    const name = params.get("event");
+    const data = params.get("data");
+    if(name && data){
+        try{
+            events[name] = JSON.parse(atob(data));
+            currentEvent=name;
+            saveEvents();
+        }catch(e){}
     }
+}
 
-    // 初始渲染
-    renderEvents();
+// 初始化
+loadFromURL();
+renderEvents();
+renderExpenses();
+
 });
 </script>
 </body>
