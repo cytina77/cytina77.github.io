@@ -16,16 +16,19 @@ button { cursor:pointer; }
 </style>
 </head>
 <body>
-<h1>分帳工具完整版1</h1>
+<h1>分帳工具測試</h1>
 
 <!-- 新增活動 -->
-<div class="card">
-<input id="newEventName" placeholder="新增活動名稱">
-<button id="addEventBtn">新增活動</button>
+<div id="newEventContainer" class="card">
+  <input id="newEventName" placeholder="新增活動名稱">
+  <button id="addEventBtn">新增活動</button>
 </div>
 
 <!-- 活動列表 -->
 <div id="eventsContainer"></div>
+
+<!-- 進入活動後的支出表單與支出列表 -->
+<div id="expenseContainer"></div>
 
 <!-- 圓餅圖 -->
 <div class="card" id="chartCard" style="display:none;">
@@ -47,6 +50,7 @@ let currentEvent = null;
 
 // ---------------- 新增活動 ----------------
 document.getElementById("addEventBtn").addEventListener("click", createEvent);
+window.createEvent = createEvent; // 全域函式
 function createEvent(){
     const name = document.getElementById("newEventName").value.trim();
     if(!name) return alert("請輸入活動名稱");
@@ -79,20 +83,19 @@ function renderEvents(){
     }
 }
 
+// ---------------- 全域函式 ----------------
 window.selectEvent = function(name){
     currentEvent=name;
     renderExpenses();
 }
-
-function copyEvent(name){
+window.copyEvent = function(name){
     const newName=name+"_複製";
     if(events.hasOwnProperty(newName)) return alert("已存在相同名稱活動");
     events[newName]=JSON.parse(JSON.stringify(events[name]));
     saveEvents();
     renderEvents();
 }
-
-function deleteEvent(name){
+window.deleteEvent = function(name){
     if(confirm("確定刪除活動？")){
         delete events[name];
         if(currentEvent===name) currentEvent=null;
@@ -101,8 +104,7 @@ function deleteEvent(name){
         renderExpenses();
     }
 }
-
-function generateLink(name){
+window.generateLink = function(name){
     const e=events[name];
     const dataStr=btoa(JSON.stringify(e));
     const link=location.origin + location.pathname + "?event=" + encodeURIComponent(name) + "&data=" + dataStr;
@@ -110,9 +112,55 @@ function generateLink(name){
 }
 
 // ---------------- 支出功能 ----------------
+window.addExpense = function(){
+    if(!currentEvent) return alert("請先選擇活動");
+    const e = events[currentEvent];
+    const name = document.getElementById("expName").value.trim();
+    const amount = parseFloat(document.getElementById("expAmount").value);
+    const member = document.getElementById("expMember").value.trim();
+    const category = document.getElementById("expCategory").value;
+    const currency = document.getElementById("expCurrency").value;
+    const date = document.getElementById("expDate").value;
+    if(!name || !amount || !member) return alert("請完整填寫支出");
+    e.expenses.push({name, amount, member, category, currency, date});
+    if(!e.members[member]) e.members[member]=0;
+    e.members[member]+=amount;
+    saveEvents();
+    renderExpenses();
+}
+window.editExpense = function(i){
+    const e = events[currentEvent].expenses[i];
+    const name = prompt("名稱", e.name);
+    const amount = prompt("金額", e.amount);
+    const member = prompt("成員", e.member);
+    const category = prompt("分類", e.category);
+    const currency = prompt("幣別", e.currency);
+    const date = prompt("日期", e.date);
+    if(name && amount && member){
+        e.name=name; e.amount=parseFloat(amount); e.member=member;
+        e.category=category; e.currency=currency; e.date=date;
+        saveEvents();
+        renderExpenses();
+    }
+}
+window.deleteExpense = function(i){
+    const e = events[currentEvent];
+    const ex = e.expenses[i];
+    e.members[ex.member]-=ex.amount;
+    if(e.members[ex.member]<=0) delete e.members[ex.member];
+    e.expenses.splice(i,1);
+    saveEvents();
+    renderExpenses();
+}
+
+// ---------------- 渲染支出表單 ----------------
 function renderExpenses(){
-    const container = document.getElementById("eventsContainer");
-    if(!currentEvent) return;
+    const container = document.getElementById("expenseContainer");
+    if(!currentEvent){
+        container.innerHTML="";
+        updateChart();
+        return;
+    }
     const e = events[currentEvent];
     let html = `<h2>${currentEvent}</h2>`;
     html += `<div class="flex">
@@ -136,48 +184,6 @@ function renderExpenses(){
     html += "</ul>";
     container.innerHTML = html;
     updateChart();
-}
-
-function addExpense(){
-    const e = events[currentEvent];
-    const name = document.getElementById("expName").value.trim();
-    const amount = parseFloat(document.getElementById("expAmount").value);
-    const member = document.getElementById("expMember").value.trim();
-    const category = document.getElementById("expCategory").value;
-    const currency = document.getElementById("expCurrency").value;
-    const date = document.getElementById("expDate").value;
-    if(!name || !amount || !member) return alert("請完整填寫支出");
-    e.expenses.push({name, amount, member, category, currency, date});
-    if(!e.members[member]) e.members[member]=0;
-    e.members[member]+=amount;
-    saveEvents();
-    renderExpenses();
-}
-
-function editExpense(i){
-    const e = events[currentEvent].expenses[i];
-    const name = prompt("名稱", e.name);
-    const amount = prompt("金額", e.amount);
-    const member = prompt("成員", e.member);
-    const category = prompt("分類", e.category);
-    const currency = prompt("幣別", e.currency);
-    const date = prompt("日期", e.date);
-    if(name && amount && member){
-        e.name=name; e.amount=parseFloat(amount); e.member=member;
-        e.category=category; e.currency=currency; e.date=date;
-        saveEvents();
-        renderExpenses();
-    }
-}
-
-function deleteExpense(i){
-    const e = events[currentEvent];
-    const ex = e.expenses[i];
-    e.members[ex.member]-=ex.amount;
-    if(e.members[ex.member]<=0) delete e.members[ex.member];
-    e.expenses.splice(i,1);
-    saveEvents();
-    renderExpenses();
 }
 
 // ---------------- 圓餅圖 ----------------
@@ -206,12 +212,12 @@ function updateChart(){
     window.pie=new Chart(ctx,{type:'pie',data:data});
 }
 
-// ---------------- 儲存與分享 ----------------
+// ---------------- 儲存 ----------------
 function saveEvents(){
     localStorage.setItem("events", JSON.stringify(events));
 }
 
-// ---------------- 讀取分享連結資料 ----------------
+// ---------------- 分享連結初始化 ----------------
 function loadFromURL(){
     const params=new URLSearchParams(window.location.search);
     const name=params.get("event");
