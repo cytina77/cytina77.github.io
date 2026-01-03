@@ -3,152 +3,75 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>分帳工具</title>
+<title>分帳工具測試版</title>
 <style>
-body { font-family: Arial, sans-serif; padding: 10px; max-width: 800px; margin:auto; }
-h1 { text-align:center; }
-input, select, button { margin:5px; padding:5px; }
-.card { border:1px solid #ccc; padding:10px; margin:10px 0; border-radius:8px; }
-.chart-container { width:100%; max-width:400px; margin:auto; }
+body { font-family: Arial; max-width:600px; margin:auto; padding:10px; }
+.card { border:1px solid #ccc; border-radius:8px; padding:10px; margin:10px 0; background:#f9f9f9; }
+button { padding:5px 10px; margin-left:5px; cursor:pointer; }
 </style>
 </head>
 <body>
-<h1>分帳工具</h1>
+<h1>分帳工具測試版</h1>
 
-<div>
-<input id="newEventName" placeholder="新增活動名稱">
-<button onclick="createEvent()">新增活動</button>
+<!-- 新增活動 -->
+<div class="card">
+<input id="newEventName" placeholder="輸入活動名稱">
+<button id="addEventBtn">新增活動</button>
 </div>
 
+<!-- 活動列表 -->
 <div id="eventsContainer"></div>
 
-<!-- 圓餅圖 -->
-<canvas id="pieChart" class="chart-container"></canvas>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-// 初始化
-let events = JSON.parse(localStorage.getItem("events") || "{}");
-let currentEvent = null;
+// 確保 JS 等網頁元素載入完才綁定事件
+document.addEventListener("DOMContentLoaded", function(){
 
-// 建立活動
-function createEvent(){
-    const name = document.getElementById("newEventName").value.trim();
-    if(!name) return alert("請輸入活動名稱");
-    if(events[name]) return alert("活動已存在");
-    events[name] = { members: {}, expenses: [] };
-    currentEvent = name;
-    localStorage.setItem("events", JSON.stringify(events));
-    document.getElementById("newEventName").value = "";
-    renderEvents();
-}
+    // 初始化事件資料
+    let events = JSON.parse(localStorage.getItem("events") || "{}");
+    let currentEvent = null;
 
-// 顯示活動
-function renderEvents(){
-    const container = document.getElementById("eventsContainer");
-    container.innerHTML = "";
-    for(const name in events){
-        const div = document.createElement("div");
-        div.className = "card";
-        div.innerHTML = `
-            <strong>${name}</strong>
-            <button onclick="selectEvent('${name}')">進入</button>
-            <button onclick="deleteEvent('${name}')">刪除</button>
-        `;
-        container.appendChild(div);
-    }
-}
+    // 綁定按鈕
+    document.getElementById("addEventBtn").addEventListener("click", createEvent);
 
-// 選擇活動
-function selectEvent(name){
-    currentEvent = name;
-    renderExpenses();
-}
-
-// 刪除活動
-function deleteEvent(name){
-    if(confirm("確定刪除活動？")){
-        delete events[name];
-        localStorage.setItem("events", JSON.stringify(events));
-        if(currentEvent===name) currentEvent=null;
+    // 新增活動
+    function createEvent(){
+        const name = document.getElementById("newEventName").value.trim();
+        if(!name){ alert("請輸入活動名稱"); return; }
+        if(events[name]){ alert("活動已存在"); return; }
+        events[name] = { expenses: [] };
+        currentEvent = name;
+        document.getElementById("newEventName").value = "";
+        saveEvents();
         renderEvents();
-        renderExpenses();
     }
-}
 
-// 顯示支出
-function renderExpenses(){
-    if(!currentEvent) return;
-    const e = events[currentEvent];
-    let html = `<h2>${currentEvent}</h2>`;
-    html += `<div>
-        名稱: <input id="expName" placeholder="支出名稱">
-        金額: <input id="expAmount" type="number">
-        成員: <input id="expMember" placeholder="成員名稱">
-        分類: <select id="expCategory">
-            <option>餐飲</option><option>住宿</option><option>交通</option>
-            <option>飛機</option><option>玩樂</option><option>其他</option>
-        </select>
-        幣別: <select id="expCurrency"><option>AUD</option><option>JPY</option><option>USD</option></select>
-        <button onclick="addExpense()">新增支出</button>
-    </div>`;
-    html += "<ul>";
-    for(let i=0;i<e.expenses.length;i++){
-        const ex = e.expenses[i];
-        html += `<li>${ex.member} ${ex.name} ${ex.amount} ${ex.currency} (${ex.category}) 
-        <button onclick="deleteExpense(${i})">刪除</button></li>`;
+    // 顯示活動列表
+    function renderEvents(){
+        const container = document.getElementById("eventsContainer");
+        container.innerHTML = "";
+        for(const name in events){
+            const div = document.createElement("div");
+            div.className = "card";
+            div.innerHTML = `<strong>${name}</strong>
+            <button onclick="selectEvent('${name}')">進入</button>`;
+            container.appendChild(div);
+        }
     }
-    html += "</ul>";
-    document.getElementById("eventsContainer").innerHTML = html;
-    updateChart();
-}
 
-// 新增支出
-function addExpense(){
-    const e = events[currentEvent];
-    const name = document.getElementById("expName").value.trim();
-    const amount = parseFloat(document.getElementById("expAmount").value);
-    const member = document.getElementById("expMember").value.trim();
-    const category = document.getElementById("expCategory").value;
-    const currency = document.getElementById("expCurrency").value;
-    if(!name || !amount || !member) return alert("請完整填寫支出");
-    e.expenses.push({name, amount, member, category, currency});
-    if(!e.members[member]) e.members[member]=0;
-    e.members[member]+=amount;
-    localStorage.setItem("events", JSON.stringify(events));
-    renderExpenses();
-}
-
-// 刪除支出
-function deleteExpense(i){
-    events[currentEvent].expenses.splice(i,1);
-    localStorage.setItem("events", JSON.stringify(events));
-    renderExpenses();
-}
-
-// 圓餅圖
-function updateChart(){
-    if(!currentEvent) return;
-    const ctx = document.getElementById('pieChart').getContext('2d');
-    const e = events[currentEvent];
-    const categories = {};
-    for(const ex of e.expenses){
-        categories[ex.category] = (categories[ex.category]||0)+ex.amount;
+    // 選擇活動
+    window.selectEvent = function(name){
+        currentEvent = name;
+        alert("已選擇活動：" + name);
     }
-    const data = {
-        labels: Object.keys(categories),
-        datasets: [{
-            data: Object.values(categories),
-            backgroundColor: ['#FF6384','#36A2EB','#FFCE56','#66FF66','#FF9966','#9966FF']
-        }]
-    };
-    if(window.pie) window.pie.destroy();
-    window.pie = new Chart(ctx,{type:'pie',data:data});
-}
 
-// 初始化
-renderEvents();
-renderExpenses();
+    // 儲存資料到 localStorage
+    function saveEvents(){
+        localStorage.setItem("events", JSON.stringify(events));
+    }
+
+    // 初始渲染
+    renderEvents();
+});
 </script>
 </body>
 </html>
