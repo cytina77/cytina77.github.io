@@ -5,41 +5,31 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>分帳工具</title>
 <style>
-body { font-family: Arial, sans-serif; padding: 10px; max-width: 900px; margin:auto; background:#f5f5f5;}
-h1,h2 { text-align:center; }
+body { font-family: Arial, sans-serif; padding: 10px; max-width: 800px; margin:auto; }
+h1 { text-align:center; }
 input, select, button { margin:5px; padding:5px; }
-.card { border:1px solid #ccc; padding:10px; margin:10px 0; border-radius:8px; background:#fff; box-shadow: 0 2px 5px rgba(0,0,0,0.1);}
+.card { border:1px solid #ccc; padding:10px; margin:10px 0; border-radius:8px; }
 .chart-container { width:100%; max-width:400px; margin:auto; }
-.flex { display:flex; flex-wrap:wrap; gap:5px; }
-.flex input, .flex select { flex:1; min-width:100px; }
-button { cursor:pointer; }
 </style>
 </head>
 <body>
 <h1>分帳工具</h1>
 
-<!-- 新增活動 -->
-<div class="card">
+<div>
 <input id="newEventName" placeholder="新增活動名稱">
 <button onclick="createEvent()">新增活動</button>
 </div>
 
-<!-- 活動列表 -->
 <div id="eventsContainer"></div>
 
 <!-- 圓餅圖 -->
-<div class="card">
-<h2>支出類別分布</h2>
 <canvas id="pieChart" class="chart-container"></canvas>
-</div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 // 初始化
 let events = JSON.parse(localStorage.getItem("events") || "{}");
 let currentEvent = null;
-
-// ----------- 活動相關功能 -----------
 
 // 建立活動
 function createEvent(){
@@ -48,33 +38,12 @@ function createEvent(){
     if(events[name]) return alert("活動已存在");
     events[name] = { members: {}, expenses: [] };
     currentEvent = name;
-    saveEvents();
+    localStorage.setItem("events", JSON.stringify(events));
     document.getElementById("newEventName").value = "";
     renderEvents();
-    renderExpenses();
 }
 
-// 複製活動
-function copyEvent(name){
-    const newName = name + "_複製";
-    if(events[newName]) return alert("已存在相同名稱活動");
-    events[newName] = JSON.parse(JSON.stringify(events[name]));
-    saveEvents();
-    renderEvents();
-}
-
-// 刪除活動
-function deleteEvent(name){
-    if(confirm("確定刪除活動？")){
-        delete events[name];
-        saveEvents();
-        if(currentEvent===name) currentEvent=null;
-        renderEvents();
-        renderExpenses();
-    }
-}
-
-// 顯示活動列表
+// 顯示活動
 function renderEvents(){
     const container = document.getElementById("eventsContainer");
     container.innerHTML = "";
@@ -82,11 +51,9 @@ function renderEvents(){
         const div = document.createElement("div");
         div.className = "card";
         div.innerHTML = `
-            <strong>${name}</strong> 
+            <strong>${name}</strong>
             <button onclick="selectEvent('${name}')">進入</button>
-            <button onclick="copyEvent('${name}')">複製</button>
             <button onclick="deleteEvent('${name}')">刪除</button>
-            <button onclick="generateLink('${name}')">分享連結</button>
         `;
         container.appendChild(div);
     }
@@ -98,23 +65,23 @@ function selectEvent(name){
     renderExpenses();
 }
 
-// 生成專屬分享連結
-function generateLink(name){
-    const e = events[name];
-    const dataStr = btoa(JSON.stringify(e));
-    const link = location.origin + location.pathname + "?event=" + encodeURIComponent(name) + "&data=" + dataStr;
-    prompt("分享此連結給朋友：", link);
+// 刪除活動
+function deleteEvent(name){
+    if(confirm("確定刪除活動？")){
+        delete events[name];
+        localStorage.setItem("events", JSON.stringify(events));
+        if(currentEvent===name) currentEvent=null;
+        renderEvents();
+        renderExpenses();
+    }
 }
-
-// ----------- 支出相關功能 -----------
 
 // 顯示支出
 function renderExpenses(){
-    const container = document.getElementById("eventsContainer");
     if(!currentEvent) return;
     const e = events[currentEvent];
     let html = `<h2>${currentEvent}</h2>`;
-    html += `<div class="flex">
+    html += `<div>
         名稱: <input id="expName" placeholder="支出名稱">
         金額: <input id="expAmount" type="number">
         成員: <input id="expMember" placeholder="成員名稱">
@@ -123,17 +90,16 @@ function renderExpenses(){
             <option>飛機</option><option>玩樂</option><option>其他</option>
         </select>
         幣別: <select id="expCurrency"><option>AUD</option><option>JPY</option><option>USD</option></select>
-        日期: <input id="expDate" type="date">
         <button onclick="addExpense()">新增支出</button>
     </div>`;
     html += "<ul>";
-    e.expenses.forEach((ex,i)=>{
-        html += `<li>${ex.member} ${ex.name} ${ex.amount} ${ex.currency} (${ex.category}) 日期:${ex.date} 
-        <button onclick="editExpense(${i})">編輯</button>
+    for(let i=0;i<e.expenses.length;i++){
+        const ex = e.expenses[i];
+        html += `<li>${ex.member} ${ex.name} ${ex.amount} ${ex.currency} (${ex.category}) 
         <button onclick="deleteExpense(${i})">刪除</button></li>`;
-    });
+    }
     html += "</ul>";
-    container.innerHTML = html;
+    document.getElementById("eventsContainer").innerHTML = html;
     updateChart();
 }
 
@@ -145,46 +111,22 @@ function addExpense(){
     const member = document.getElementById("expMember").value.trim();
     const category = document.getElementById("expCategory").value;
     const currency = document.getElementById("expCurrency").value;
-    const date = document.getElementById("expDate").value;
     if(!name || !amount || !member) return alert("請完整填寫支出");
-    e.expenses.push({name, amount, member, category, currency, date});
+    e.expenses.push({name, amount, member, category, currency});
     if(!e.members[member]) e.members[member]=0;
     e.members[member]+=amount;
-    saveEvents();
+    localStorage.setItem("events", JSON.stringify(events));
     renderExpenses();
-}
-
-// 編輯支出
-function editExpense(i){
-    const e = events[currentEvent].expenses[i];
-    const name = prompt("名稱", e.name);
-    const amount = prompt("金額", e.amount);
-    const member = prompt("成員", e.member);
-    const category = prompt("分類", e.category);
-    const currency = prompt("幣別", e.currency);
-    const date = prompt("日期", e.date);
-    if(name && amount && member){
-        e.name=name; e.amount=parseFloat(amount); e.member=member;
-        e.category=category; e.currency=currency; e.date=date;
-        saveEvents();
-        renderExpenses();
-    }
 }
 
 // 刪除支出
 function deleteExpense(i){
-    const e = events[currentEvent];
-    const ex = e.expenses[i];
-    e.members[ex.member]-=ex.amount;
-    if(e.members[ex.member]<=0) delete e.members[ex.member];
-    e.expenses.splice(i,1);
-    saveEvents();
+    events[currentEvent].expenses.splice(i,1);
+    localStorage.setItem("events", JSON.stringify(events));
     renderExpenses();
 }
 
-// ----------- 圓餅圖 -----------
-
-let pie=null;
+// 圓餅圖
 function updateChart(){
     if(!currentEvent) return;
     const ctx = document.getElementById('pieChart').getContext('2d');
@@ -200,32 +142,11 @@ function updateChart(){
             backgroundColor: ['#FF6384','#36A2EB','#FFCE56','#66FF66','#FF9966','#9966FF']
         }]
     };
-    if(pie) pie.destroy();
-    pie = new Chart(ctx,{type:'pie',data:data});
+    if(window.pie) window.pie.destroy();
+    window.pie = new Chart(ctx,{type:'pie',data:data});
 }
 
-// ----------- 存檔 -----------
-
-function saveEvents(){
-    localStorage.setItem("events", JSON.stringify(events));
-}
-
-// ----------- 讀取分享連結 -----------
-
-function loadFromURL(){
-    const params = new URLSearchParams(window.location.search);
-    const name = params.get("event");
-    const data = params.get("data");
-    if(name && data){
-        try{
-            events[name] = JSON.parse(atob(data));
-            currentEvent=name;
-            saveEvents();
-        }catch(e){}
-    }
-}
-
-loadFromURL();
+// 初始化
 renderEvents();
 renderExpenses();
 </script>
